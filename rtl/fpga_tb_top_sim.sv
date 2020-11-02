@@ -5,20 +5,14 @@
 // Author      : YJGuan               
 // Date        : 2020-11-02
 // Version     : 0.1
-// Description :
-//    
-//    
-// Parameter   :
-//    ...
-//    ...
+// Description : verify the function of the fpga implemented testbench in NCSim simulation
 // IO Port     :
-//  input s_rst_n,
-//  input s_clk
+//  input s_rst_n, input s_clk
+//  
 // Modification History:
 //   Date   |   Author   |   Version   |   Change Description
 //==============================================================================
 // 20-11-02 |  YJ-Guan   |     0.1     |  Original Version
-// ...
 ////////////////////////////////////////////////////////////////////////////////
 
 `include "tb_jtag_pkg.sv"
