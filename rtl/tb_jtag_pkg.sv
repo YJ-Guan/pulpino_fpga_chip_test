@@ -8,6 +8,8 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations under the License.
 
+// modified version for synthesizable 
+
 `define JTAG_CLUSTER_INSTR_WIDTH     4
 
 `define JTAG_CLUSTER_IDCODE          4'b0010
@@ -25,6 +27,7 @@ interface jtag_i;
    logic tms   = 1'b0;
    logic tdi   = 1'b0;
    logic tdo;
+   logic s_clk = 1'b0;
 endinterface
 
 class JTAG_reg #(int unsigned size = 32);
@@ -161,8 +164,16 @@ class JTAG_reg #(int unsigned size = 32);
       end
    endtask
 
-   local task jtag_wait_halfperiod(input int cycles);
-      #(50000*cycles);
+   local task jtag_wait_halfperiod(input int cycles, output logic enable);
+   // modified for synthesize
+      reg [15:0] cnt;
+      always_ff @(posedge jtag_if.s_clk) begin
+         if (cnt != 16'd50000) begin
+            cnt <= cnt + 1;
+         end else begin
+            cnt <= 
+         end
+      end
    endtask
 
 endclass

@@ -20,7 +20,8 @@
 
 module fpga_tb_top_sim(
   input s_rst_n,
-  input s_clk
+  input s_clk,
+  input jtag_clk
 );
 
   // +MEMLOAD= valid values are "SPI", "STANDALONE" "PRELOAD", "" (no load of L2)
@@ -78,7 +79,8 @@ module fpga_tb_top_sim(
   logic [31:0]  recv_data;
 
   jtag_i jtag_if();
-
+  assign jtag_if.s_clk    = s_clk;
+  
   adv_dbg_if_t adv_dbg_if = new(jtag_if);
 
   pulpino_top
