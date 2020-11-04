@@ -3,16 +3,14 @@
 // ALL RIGHT RESERVED
 // File name   : fpga_tb_top_sim.sv
 // Author      : YJGuan               
-// Date        : 2020-11-02
+// Date        : 2020-11-04
 // Version     : 0.1
 // Description : verify the function of the fpga implemented testbench in NCSim simulation
-// IO Port     :
-//  input s_rst_n, input s_clk
 //  
 // Modification History:
 //   Date   |   Author   |   Version   |   Change Description
 //==============================================================================
-// 20-11-02 |  YJ-Guan   |     0.1     |  Original Version
+// 20-11-04 |  YJ-Guan   |     0.1     |  Original Version
 ////////////////////////////////////////////////////////////////////////////////
 
 `include "tb_jtag_pkg.sv"
@@ -78,10 +76,27 @@ module fpga_tb_top_sim(
 
   logic [31:0]  recv_data;
 
-  jtag_i jtag_if();
-  assign jtag_if.s_clk    = s_clk;
+  logic         tck    ;         
+  logic         trstn  ; 
+  logic         tms    ; 
+  logic         tdi    ; 
+  logic         tdo    ; 
+  logic         jtag_start;
+  logic         jtag_done;
+  assign tck = jtag_clk;
+
+  jtag_com jtag_com_i 
+  (
+    .jtag_clk_i        ( jtag_clk   ),
+    .tdo               ( tdo        ),
+    .jtag_start        ( jtag_start ),
+    .rst_n             ( rst_n      ),
+    .trstn             ( trstn      ),
+    .tms               ( tms        ),
+    .tdi               ( tdi        ),  
+    .jtag_done         ( jtag_done  )
+  );
   
-  adv_dbg_if_t adv_dbg_if = new(jtag_if);
 
   pulpino_top
   #(
@@ -146,20 +161,17 @@ module fpga_tb_top_sim(
     .gpio_dir          ( gpio_dir     ),
     .gpio_padcfg       (              ),
 
-    .tck_i             ( jtag_if.tck     ),
-    .trstn_i           ( jtag_if.trstn   ),
-    .tms_i             ( jtag_if.tms     ),
-    .tdi_i             ( jtag_if.tdi     ),
-    .tdo_o             ( jtag_if.tdo     )
+    .tck_i             ( tck          ),
+    .trstn_i           ( trstn        ),
+    .tms_i             ( tms          ),
+    .tdi_i             ( tdi          ),
+    .tdo_o             ( tdo          )
   ); 
 
   always_ff @(negedge s_rst_n) begin
     if (s_rst == 1'b0) begin
       /* Configure JTAG and set boot address */
-      adv_dbg_if.jtag_reset();
-      adv_dbg_if.jtag_softreset();
-      adv_dbg_if.init();
-      adv_dbg_if.axi4_write32(32'h1A10_7008, 1, 32'h0000_0000); // 1A10_7008 = Boot ADDR
+    
     end
   end
 
