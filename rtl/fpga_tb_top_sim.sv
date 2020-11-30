@@ -3,30 +3,26 @@
 // ALL RIGHT RESERVED
 // File name   : fpga_tb_top_sim.sv
 // Author      : YJGuan               
-// Date        : 2020-11-05
+// Date        : 2020-11-19
 // Version     : 0.1
 // Description : verify the function of the fpga implemented testbench in NCSim simulation
 //  
 // Modification History:
 //   Date   |   Author   |   Version   |   Change Description
 //==============================================================================
-// 20-11-05 |  YJ-Guan   |     0.1     |  Original Version
+// 20-11-19 |  YJ-Guan   |     0.1     |  Original Version
 ////////////////////////////////////////////////////////////////////////////////
 
 `include "config.sv"        // config file for pulpino in asic simulation
 
 module fpga_tb_top_sim(
-  input s_rst_n,
+  input rst_n,
   input s_clk,        // s_clk    = 25 MHz
   input jtag_clk,     // jtag_clk = 10 kHz
   input spi_clk       // spi_clk  = 10 MHz  T = 100 ns
 );
 
-  // +MEMLOAD= valid values are "SPI", "STANDALONE" "PRELOAD", "" (no load of L2)
-  parameter  SPI            = "QUAD";    // valid values are "SINGLE", "QUAD"
-  parameter  BAUDRATE       = 781250;    // 1562500
-  parameter  CLK_USE_FLL    = 0;         // 0 or 1
-  parameter  TEST           = "";        //valid values are "" (NONE), "DEBUG"
+
   parameter  USE_ZERO_RISCY = 0;
   parameter  RISCY_RV32F    = 0;
   parameter  ZERO_RV32M     = 1;
@@ -38,14 +34,13 @@ module fpga_tb_top_sim(
   //int           exit_status = `EXIT_ERROR; // modelsim exit code, will be overwritten when successful
 
   //string        memload;
-  logic         s_clk   = 1'b0;
-  logic         s_rst_n = 1'b0;
+  reg           s_rst_n ;
 
-  logic         fetch_enable = 1'b0;
+  reg           fetch_enable ;
 
   logic [1:0]   padmode_spi_master; // SPI master Signals to drive pulp
-  logic         spi_sck   = 1'b0;
-  logic         spi_csn   = 1'b1;   // chip select
+  logic         spi_sck;
+  logic         spi_csn ;           // chip select
   logic [1:0]   spi_mode;           // CPOL (Clock polarity) + CPHA (Clock phase)   
   logic         spi_sdo0;
   logic         spi_sdo1;
@@ -91,12 +86,12 @@ module fpga_tb_top_sim(
   logic         jtag_halt;
   logic         jtag_done;
 
-  logic [2:0]   CS;
+  reg   [2:0]   CS;
   logic [2:0]   CS_r;
   logic [2:0]   NS;
 
-  assign tck     = jtag_clk & (~ jtag_done || ~ jtag_halt);
-  assign spi_sck = spi_clk  & (~ spi_done  || ~ spi_halt);
+  assign tck     = (~ jtag_done && ~ jtag_halt) ? !jtag_clk :0;
+  assign spi_sck = (~ spi_done  && ~ spi_halt && ~ spi_csn) ? !spi_clk : 0;
 
   jtag_com jtag_com_i 
   (
@@ -113,9 +108,9 @@ module fpga_tb_top_sim(
 
   spi_com spi_com_i
   (
-    .spi_clk_i,         ( spi_clk_i  ),
-    .rst_n,             ( rst_n      ),
-    .spi_cs_i ,         ( spi_csn    ),
+    .spi_clk_i          ( spi_clk    ),
+    .rst_n              ( rst_n      ),
+    .spi_cs_i           ( spi_csn    ),
     .spi_mode_o         ( spi_mode   ),
     .spi_sdo0_o         ( spi_sdo0   ),
     .spi_sdo1_o         ( spi_sdo1   ),
@@ -127,7 +122,7 @@ module fpga_tb_top_sim(
     .spi_sdi1_i         ( spi_sdi1   ),
     .spi_sdi2_i         ( spi_sdi2   ),
     .spi_sdi3_i         ( spi_sdi3   ),
-    .jtag_halt          ( jtag_halt  ),
+    .spi_halt           ( spi_halt  ),
     .spi_done           ( spi_done   )
   );
   
@@ -151,14 +146,14 @@ module fpga_tb_top_sim(
     .spi_clk_i         ( spi_sck      ),        // spi slave port in pulp
     .spi_cs_i          ( spi_csn      ),
     .spi_mode_o        ( spi_mode     ),
-    .spi_sdo0_o        ( spi_sdi0     ),
-    .spi_sdo1_o        ( spi_sdi1     ),
-    .spi_sdo2_o        ( spi_sdi2     ),
-    .spi_sdo3_o        ( spi_sdi3     ),
-    .spi_sdi0_i        ( spi_sdo0     ),
-    .spi_sdi1_i        ( spi_sdo1     ),
-    .spi_sdi2_i        ( spi_sdo2     ),
-    .spi_sdi3_i        ( spi_sdo3     ),
+    .spi_sdo0_o        ( spi_sdo0     ),
+    .spi_sdo1_o        ( spi_sdo1     ),
+    .spi_sdo2_o        ( spi_sdo2     ),
+    .spi_sdo3_o        ( spi_sdo3     ),
+    .spi_sdi0_i        ( spi_sdi0     ),
+    .spi_sdi1_i        ( spi_sdi1     ),
+    .spi_sdi2_i        ( spi_sdi2     ),
+    .spi_sdi3_i        ( spi_sdi3     ),
 
     .spi_master_clk_o  ( /*spi_master.clk    */ ),
     .spi_master_csn0_o ( /*spi_master.csn    */ ),
@@ -202,57 +197,72 @@ module fpga_tb_top_sim(
     .tdo_o             ( tdo          )
   ); 
 
+
+  logic [3:0] delay_cnt;
+  logic       reset_cnt_n;
+  logic       delay_out;
+
     /* FSM to switch the control of test output signal control */
-  always_ff @(posedge s_clk , negedge s_rst_n) begin
-    if ( s_rst_n == 1'b0) begin
+  always_ff @(posedge s_clk , negedge rst_n) begin
+    if ( !rst_n )  begin
       CS <= STATE_HALT;
+      CS_r <= STATE_HALT;
     end
     else begin
       CS <= NS;
+      if (CS != STATE_DELAY) CS_r <= CS;
     end
   end
 
-  always_ff @(posedge s_clk , negedge s_rst_n) begin
-    if      ( s_rst_n == 1'b0 )   CS_r <= STATE_HALT;
-    else if ( CS != STATE_DELAY)  CS_r <= CS;
-    else                          CS_r <= CS_r;
+  always_comb begin     // next state logic
+    if ( !rst_n )  NS = STATE_HALT;
+    else begin
+    case (CS)
+        STATE_HALT:         NS = STATE_DELAY;
+        STATE_DELAY:
+          begin
+            if      ( delay_out == 1'b0 ) 
+                            NS = STATE_DELAY;
+            else if ( delay_out == 1'b1 ) begin
+              case (CS_r)
+                STATE_HALT: NS = STATE_RST;
+                STATE_RST : NS = STATE_SPI1;
+                STATE_SPI2: NS = STATE_FETCH;
+                default:    NS = STATE_RST;
+              endcase
+            end
+          end
+        STATE_RST:          NS = STATE_DELAY;
+        STATE_SPI1:         NS = spi_done  ? STATE_JTAG : STATE_SPI1;
+        STATE_JTAG:         NS = jtag_done ? STATE_SPI2 : STATE_JTAG;
+        STATE_SPI2:         NS = spi_done  ? STATE_DELAY: STATE_SPI2;
+        STATE_FETCH:        NS = STATE_FETCH;
+        default:            NS = STATE_HALT;
+      endcase
+    end
   end
 
-  always_comb begin     // next state logic
-    NS = 3'bxxx;
+  always_comb  begin    // fsm output logic
+    s_rst_n  = 1'b1; fetch_enable = 1'b0; 
+    spi_start1 = 1'b0; spi_start2 = 1'b0; jtag_start = 1'b0;
     case (CS)
-      STATE_HALT:         NS = STATE_DELAY;
       STATE_DELAY:
         begin
-          if      ( delay_out == 1'b0 ) 
-              NS = STATE_DELAY;
-          else if ( delay_out == 1'b1 ) begin
-            case (CS_r)
-              STATE_HALT: NS = STATE_RST;
-              STATE_RST : NS = STATE_SPI1;
-              STATE_SPI2: NS = STATE_FETCH;
-              default:    NS = STATE_RST;
-            endcase
-          end
-        end
-      STATE_RST:          NS = STATE_DELAY;
-      STATE_SPI1:         NS = spi_done  ? STATE_JTAG : STATE_SPI1;
-      STATE_JTAG:         NS = jtag_done ? STATE_SPI2 : STATE_JTAG;
-      STATE_SPI2:         NS = spi_done  ? STATE_DELAY: STATE_SPI2;
-      STATE_FETCH:        NS = SPI_FETCH;
-      default:
-    endcase
-  end
-
-  always_ff  begin    // fsm output logic
-    s_rst_n  = 1'bx; fetch_enable = 1'bx;
-    case (CS)
+          case (CS_r)
+            STATE_HALT: begin s_rst_n = 1'b0; fetch_enable = 1'b0; end
+            STATE_RST:  begin s_rst_n = 1'b1; fetch_enable = 1'b0; end
+            default :   begin s_rst_n = 1'b1; fetch_enable = 1'b0; end
+          endcase
+        end 
       STATE_HALT: 
         begin
           s_rst_n = 1'b0; fetch_enable = 1'b0;
         end
-      STATE_RST: s_rst_n = 1'b1;
-      STATE_FETCH: fetch_enable = 1'b1;
+      STATE_RST:    s_rst_n = 1'b1;
+      STATE_FETCH:  fetch_enable = 1'b1;
+      STATE_SPI1:   spi_start1 = 1'b1;
+      STATE_JTAG:   jtag_start = 1'b1;
+      STATE_SPI2:   spi_start2 = 1'b1;
       default:
         begin
           s_rst_n = 1'b1; fetch_enable = 1'b0;
@@ -260,13 +270,10 @@ module fpga_tb_top_sim(
     endcase
   end
 
-  logic [3:0] delay_cnt;
-  logic       reset_cnt_n;
-  logic       delay_out;
 
     /* counter to generate 10 clk delay */
-  always_ff @(posedge s_clk) begin
-    if ( s_rst_n == 1'b0 || NS != STATE_DELAY) begin
+  always_ff @(posedge s_clk, negedge rst_n) begin
+    if ( rst_n == 1'b0 || NS != STATE_DELAY) begin
       delay_cnt <= 4'b0;
       delay_out <= 1'b0;
     end
@@ -276,7 +283,6 @@ module fpga_tb_top_sim(
     end
     else if ( NS == STATE_DELAY )
       delay_cnt  <= delay_cnt + 1;
-    end
     else delay_cnt <= delay_cnt;
   end
 

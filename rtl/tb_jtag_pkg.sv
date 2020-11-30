@@ -65,7 +65,7 @@ class JTAG_reg #(int unsigned size = 32);
       jtag_if.tdi    <= 1'b0;
       this.jtag_clock(1);
       jtag_if.tms   <= 1'b0;
-      this.jtag_clock(1);
+      this.jtag_clock(1);        
    endtask
 
    task update_and_goto_shift();
